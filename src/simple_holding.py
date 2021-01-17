@@ -88,8 +88,8 @@ def get_fund_data(code,per=10,sdate='',edate='',proxies=None):
 
     return data
 
-hs300_460300 = get_fund_data('460300',per=60,sdate='2015-01-01',edate='2020-01-01')
-hs300_460300.to_csv('data/460300.csv', index = 0)
+hs300_460300 = get_fund_data('217011',per=60,sdate='2015-01-01',edate='2021-01-01')
+hs300_460300.to_csv('data/217011.csv', index = 0)
 
 all_fund_frame[all_fund_frame.code == '460300']
 
@@ -139,7 +139,144 @@ for i, row in enumerate(total_2015.values):
     
     # 添加换仓逻辑
     
-jinzhi
 
-plt.plot(jinzhi)
+def simple_holding_strategy(data: pd.DataFrame, weight = None):
+    
+    if weight is None:
+        print('请指定weight')
+        return 
+    
+    strategy_pnl = np.array([])
+    strategy_weight = None
+    
+    for i in np.arange(data.shape[0]):
+        
+        if i == 0:
+            strategy_pnl = np.append(strategy_pnl, 1)
+            strategy_weight = weight.copy()
+        else:
+            
+            # 1. 计算收益率
+            yesterday_md = data.values[i-1, ]
+            today_md = data.values[i, ]
+            simple_ret = today_md / yesterday_md
+            
+            # 2。 更新仓位
+            strategy_weight = strategy_weight * simple_ret
+            
+            # 3. 添加净值
+            strategy_pnl = np.append(strategy_pnl, strategy_weight.sum())
+        
+    return strategy_pnl
+
+
+def get_datetime_from_str(date):
+    '''
+        2015-01-05转为datetime
+    '''
+    return datetime.datetime.strptime(date, '%Y-%m-%d')
+
+def is_rebalance_day(today, yesterday):
+    
+    today = get_datetime_from_str(today)
+    yesterday = get_datetime_from_str(yesterday)
+    if today.month == 7 and yesterday.month == 6:
+        return True
+    elif today.month == 1 and yesterday.month == 12:
+        return True
+    return False
+    
+    
+
+def simple_holding_strategy_balance(data: pd.DataFrame, weight = None):
+    
+    if weight is None:
+        print('请指定weight')
+        return 
+    
+    strategy_pnl = np.array([])
+    strategy_weight = None
+    
+    for i in np.arange(data.shape[0]):
+        
+        if i == 0:
+            strategy_pnl = np.append(strategy_pnl, 1)
+            strategy_weight = weight.copy()
+            continue
+        else:
+            
+            # 1. 计算收益率
+            yesterday_md = data.values[i-1, ]
+            today_md = data.values[i, ]
+            simple_ret = today_md / yesterday_md
+            
+            # 2。 更新仓位
+            strategy_weight = strategy_weight * simple_ret
+            
+            # 3. 添加净值
+            strategy_pnl = np.append(strategy_pnl, strategy_weight.sum())
+        
+        yesterday = data.index[i-1]
+        today = data.index[i]
+        if is_rebalance_day(today, yesterday):
+            current_pnl = strategy_pnl[-1]
+            strategy_weight = np.array([current_pnl*weight[0], current_pnl*weight[1]])
+        
+    return strategy_pnl
+
+
+simple_holding_strategy_balance(total_2015, np.array([0.8, 0.2]))
+
+result = []
+
+for ratio in np.arange(0.1, 1, 0.05):
+    pnl = simple_holding_strategy(total_2015, weight=np.array([ratio, 1- ratio]))
+    result.append(dict(ratio=ratio, pnl=pnl[-1]))
+
+pd.DataFrame(result)
+pd.DataFrame(result).set_index('ratio').plot()
+
+
+## 洋酒易方达蓝筹精选混合 和 国债混合
+from src.common import *
+
+guozhai = pd.read_csv('data/217011.csv')
+guozhai = guozhai.set_index('净值日期').sort_index()
+guozhai
+
+yifangda = pd.read_csv('data/110011.csv')
+
+yifangda = yifangda.set_index('净值日期').sort_index()
+
+
+total = pd.concat([guozhai['累计净值'].rename('国债'), yifangda['累计净值'].rename('易方达蓝筹精选')], axis=1).sort_index()
+total = total.dropna()
+total
+
+result = simple_holding_strategy(total, np.array([0.8, 0.2]))
+
+plt.plot(result)
+
+total.plot(subplots=True)
+
+result = simple_holding_strategy_balance(total, np.array([0.7, 0.3]))
+
+pd.Series(data = result, index = total.index).plot(figsize=(16, 9))
+
+get_max_drawdown(result)
+get_annual_return(result)
+
+get_mar(result)
+
+
+get_annual_return(total.国债.values)
+get_max_drawdown(total.国债.values)
+get_mar(total.国债.values)
+
+get_annual_return(total.易方达蓝筹精选.values)
+get_max_drawdown(total.易方达蓝筹精选.values)
+get_mar(total.易方达蓝筹精选.values)
+
+
+
 
