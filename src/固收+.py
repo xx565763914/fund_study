@@ -35,16 +35,17 @@ get_annual_return(pnl)
 get_max_drawdown(pnl)
 get_mar(pnl)
 
+plt.plot(pnl)
 
 '''
 get_annual_return(pnl)
-Out[133]: 0.047026454832702624
+Out[40]: 0.047026454832702624
 
 get_max_drawdown(pnl)
-Out[134]: 0.11390852143026081
+Out[41]: 0.10226021189244701
 
 get_mar(pnl)
-Out[135]: 0.4128440457502912
+Out[42]: 0.45987050058299384
 '''
 
 # ============================================
@@ -68,4 +69,80 @@ guozhai_rate['date'] = guozhai_rate['日期'].apply(to_time_str)
 guozhai_rate.set_index('date', inplace=True)
 guozhai_rate.sort_index(inplace=True)
 
+guozhai_rate
 
+guozhai_rate.收盘.plot(figsize=(16, 9))
+
+ts.set_token('ec4caba8049b4697b0d6006052c0ac3c6aae5ce8927463b296cbd2d6')
+
+pro = ts.pro_api()
+
+hs300_pe = pd.read_csv(r'data/000300_pe.csv')
+hs300_pe.head()
+
+hs300_pe.set_index('trade_date', inplace=True)
+
+hs300_pe.plot(subplots=True)
+
+indicator_股债性价比 = pd.concat([hs300_pe.pe_ttm.rename('pe'), guozhai_rate.收盘.rename('利率')], axis=1)
+
+indicator_股债性价比.sort_index(inplace=True)
+
+indicator_股债性价比['股债性价比'] = (1.0 / indicator_股债性价比.pe) / indicator_股债性价比.利率
+
+indicator_股债性价比.股债性价比.plot(figsize = (16, 9))
+
+indicator_股债性价比.info()
+
+indicator_股债性价比.shape
+
+
+pd.concat([indicator_股债性价比.股债性价比, hs_300.收盘价], axis = 1).sort_index().dropna().plot(figsize=(16, 9), subplots=True)
+
+
+indicator_股债性价比.股债性价比
+data_股债性价比 = total_2015.copy()
+data_股债性价比['cash'] = 1
+data_股债性价比
+
+def is_balance_day(today, yesterday):
+    today = get_datetime_from_str(today).month
+    yesterday = get_datetime_from_str(yesterday).month
+    if today != yesterday:
+        return True
+    
+    return False
+
+# 债券 股票 现金
+s_w = np.array([0, 0, 1])
+s_ret = np.array([])
+
+for i in np.arange(0, total_2015.shape[0]):
+    if i == 0:
+        s_w = np.array([0, 0, 1])
+        s_ret = np.append(s_ret, 1)
+        continue
+    else:
+        yd_md = data_股债性价比.values[i-1, ]
+        td_md = data_股债性价比.values[i, ]
+        s_rtn = td_md / yd_md
+        
+        s_w = s_w * s_rtn
+        s_ret = np.append(s_ret, s_w.sum())
+    
+    if is_balance_day(data_股债性价比.index[i], data_股债性价比.index[i-1]):
+        print(data_股债性价比.index[i])
+        cur_股债性价比 = indicator_股债性价比.股债性价比[data_股债性价比.index[i]]
+        cur_ret = s_ret[-1]
+        
+        zhaiquan_ratio = cur_ret * 0.8
+        gupiao_ratio = (cur_ret - zhaiquan_ratio) * ((cur_股债性价比 - 0.015) / (0.035 - 0.015))
+        cash_ratio = cur_ret - zhaiquan_ratio - gupiao_ratio
+        
+        s_w = np.array([zhaiquan_ratio, gupiao_ratio, cash_ratio])
+        print(s_w)
+    # print(s_w)
+        
+get_annual_return(s_ret)
+get_max_drawdown(s_ret)
+get_mar(s_ret)

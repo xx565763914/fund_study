@@ -111,7 +111,7 @@ def get_max_drawdown(pnl):
     
     for day_pnl in pnl:
         max_pnl = max(max_pnl, float(day_pnl))
-        current_drawdown = (max_pnl - day_pnl) / day_pnl
+        current_drawdown = (max_pnl - day_pnl) / max_pnl
         max_drawdown = max(max_drawdown, current_drawdown)
     return max_drawdown
 
