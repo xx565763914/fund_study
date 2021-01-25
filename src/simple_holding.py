@@ -88,6 +88,26 @@ def get_fund_data(code,per=10,sdate='',edate='',proxies=None):
 
     return data
 
+
+qqq = get_fund_data('513100', per=60, sdate='2015-01-01', edate='2021-01-21')
+
+qqq.to_csv('data/513100_纳斯达克etf.csv', index = 0)
+
+
+guozhai_etf = get_fund_data('159926', per=60, sdate='2015-01-01', edate='2021-01-21')
+guozhai_etf.head()
+guozhai_etf.to_csv('data/159926_国债etf.csv', index = 0)
+
+hs_300_etf = get_fund_data('159919', per=60, sdate='2015-01-01', edate='2021-01-21')
+hs_300_etf.head()
+hs_300_etf.to_csv('data/159919_沪深300etf.csv', index = 0)
+
+au_etf = get_fund_data('518880', per=60, sdate='2015-01-01', edate='2021-01-21')
+au_etf.head()
+au_etf.to_csv('data/518880_黄金etf.csv', index = 0)
+
+
+
 hs300_460300 = get_fund_data('217011',per=60,sdate='2015-01-01',edate='2021-01-01')
 hs300_460300.to_csv('data/217011.csv', index = 0)
 
