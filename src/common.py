@@ -16,6 +16,117 @@ import matplotlib.pyplot as plt
 import datetime
 from scipy.optimize import minimize
 
+
+
+class FundPortfolio(object):
+    '''
+        基金投资组合回测基类
+    '''
+    def __init__(self, assert_data: pd.DataFrame):
+        self.portfolio_pnl = np.array([])
+        self.portfolio_weight = None
+        self.portfolio_cash = 0.0
+        self.portfolio_risk = []
+        self.assert_data = assert_data
+    
+    def backtest(self):
+        days, assert_num = self.assert_data.shape
+        data = self.assert_data.copy()
+        
+        for i in range(days):
+            if i == 0:
+                self.portfolio_pnl = np.append(self.portfolio_pnl, 1.0)
+                self.portfolio_weight = np.array([1.0/assert_num] * assert_num)
+                self.portfolio_cash = 0.0
+                continue
+            else:
+                y_md = data.values[i-1, ]
+                t_md = data.values[i, ]
+                simple_return = t_md / y_md
+                
+                self.portfolio_weight = self.portfolio_weight * simple_return
+                self.portfolio_pnl = np.append(self.portfolio_pnl, self.portfolio_weight.sum() + self.portfolio_cash)
+            
+            # 调仓相关
+            if self.is_balance_day(i):
+                self.portfolio_weight, self.portfolio_cash = self.get_rebalanced_weight(i)
+            
+            # 计算组合风险 i > 30
+            current_portfolio_risk = np.nan
+            if i > 30:
+                cov = self.assert_num.iloc[i-30:i, :].pct_change().cov()
+                current_portfolio_risk = reduct(np.dot, self.portfolio_weight, cov, self.portfolio_weight.T)
+            self.portfolio_risk.append(dict(date = self.assert_data.index[i], portfolio_risk = current_portfolio_risk))
+            
+    
+    def get_current_portfolio_pnl(self):
+        return self.portfolio_weight.sum() + self.portfolio_cash
+    
+    def is_balance_day(self, current_day):
+        raise NotImplementedError("调仓日判断逻辑没有实现！！！！")
+    
+    def get_rebalanced_weight(self, current_day):
+        '''
+            可以通过currentDay做一个预热逻辑
+        '''
+        raise NotImplementedError("调仓逻辑没有实现！！！！")
+        
+    def get_portfolio_pnl(self):
+        return self.portfolio_pnl
+    
+    def get_daily_std():
+        '''
+            获取组合每日风险
+        '''
+        return self.portfolio_risk
+    
+class MonthRebalancePortfolio(FundPortfolio):
+    '''
+        按月调仓投资组合基类
+    '''
+    def __init__(self, assert_data: pd.DataFrame):
+        super(MonthRebalancePortfolio, self).__init__(assert_data)
+    
+    def get_datetime_from_str(self, date):
+        '''
+            2015-01-05转为datetime
+        '''
+        return datetime.datetime.strptime(date, '%Y-%m-%d')
+
+    def _is_balance_day(self, today, yesterday):
+        today = get_datetime_from_str(today).month
+        yesterday = get_datetime_from_str(yesterday).month
+        if today != yesterday:
+            return True
+
+        return False
+    
+    def is_balance_day(self, current_day):
+        yd = self.assert_data.index[current_day-1]
+        td = self.assert_data.index[current_day]
+        return self._is_balance_day(td, yd)
+    
+    def get_rebalanced_weight(self, current_day):
+        raise NotImplementedError("调仓逻辑没有实现！！！")
+
+class EqualWeightPortfolio(MonthRebalancePortfolio):
+    '''
+        等权投资组合类
+    '''
+    
+    def __init__(self, assert_data: pd.DataFrame):
+        super(EqualWeightPortfolio, self).__init__(assert_data)
+    
+    def get_rebalanced_weight(self, currentDay):
+        portfolio_pnl = self.get_current_portfolio_pnl()
+        assert_num = self.assert_data.shape[1]
+        
+        new_weight = np.array([portfolio_pnl/assert_num] * assert_num)
+        new_cash = 0.0
+        
+        return new_weight, new_cash
+
+
 def get_datetime_from_str(date):
     '''
         2015-01-05转为datetime
@@ -215,18 +326,23 @@ def get_mar(pnl):
     
     return get_annual_return(pnl) / get_max_drawdown(pnl)
 
+def performance(pnl):
+    return dict(max_drawdown = get_max_drawdown(pnl), 
+                annual_return = get_annual_return(pnl),
+                mar = get_mar(pnl))
+
 # ===============================策略指标结束=====================================
     
 
 # ===================数据拉取程序============================
-    # 抓取网页
+# 抓取网页
 def get_url(url, params=None, proxies=None):
     rsp = requests.get(url, params=params, proxies=proxies)
     rsp.raise_for_status()
     return rsp.text
 
 # 从网页抓取数据
-def get_fund_data(code,per=10,sdate='',edate='',proxies=None):
+def get_fund_data(code,per=300,sdate='',edate='',proxies=None):
     url = 'http://fund.eastmoney.com/f10/F10DataApi.aspx'
     params = {'type': 'lsjz', 'code': code, 'page':1,'per': per, 'sdate': sdate, 'edate': edate}
     html = get_url(url, params, proxies)
@@ -246,6 +362,7 @@ def get_fund_data(code,per=10,sdate='',edate='',proxies=None):
     records = []
 
     # 从第1页开始抓取所有页面数据
+    print(pages)
     page=1
     while page<=pages:
         print(page)
