@@ -14,15 +14,21 @@ import re
 import numpy as np
 import time
 import matplotlib.pyplot as plt
+import datetime
+from functools import reduce
 
-
+def get_datetime_from_str(date):
+    '''
+        2015-01-05转为datetime
+    '''
+    return datetime.datetime.strptime(date, '%Y-%m-%d')
 
 class FundPortfolio(object):
     '''
         基金投资组合回测基类
     '''
     def __init__(self, assert_data: pd.DataFrame):
-        self.portfolio_pnl = np.array([])
+        self.portfolio_pnl = []
         self.portfolio_weight = None
         self.portfolio_cash = 0.0
         self.portfolio_risk = []
@@ -34,7 +40,7 @@ class FundPortfolio(object):
         
         for i in range(days):
             if i == 0:
-                self.portfolio_pnl = np.append(self.portfolio_pnl, 1.0)
+                self.portfolio_pnl.append(dict(date=self.assert_data.index[i], pnl = 1.0))
                 self.portfolio_weight = np.array([1.0/assert_num] * assert_num)
                 self.portfolio_cash = 0.0
                 continue
@@ -44,7 +50,7 @@ class FundPortfolio(object):
                 simple_return = t_md / y_md
                 
                 self.portfolio_weight = self.portfolio_weight * simple_return
-                self.portfolio_pnl = np.append(self.portfolio_pnl, self.portfolio_weight.sum() + self.portfolio_cash)
+                self.portfolio_pnl.append(dict(date=self.assert_data.index[i], pnl = self.portfolio_weight.sum() + self.portfolio_cash))
             
             # 调仓相关
             if self.is_balance_day(i):
@@ -53,8 +59,11 @@ class FundPortfolio(object):
             # 计算组合风险 i > 30
             current_portfolio_risk = np.nan
             if i > 30:
-                cov = self.assert_num.iloc[i-30:i, :].pct_change().cov()
-                current_portfolio_risk = reduct(np.dot, self.portfolio_weight, cov, self.portfolio_weight.T)
+                cov = self.assert_data.iloc[i-30:i, :].pct_change().cov()
+                assert_weight = self.portfolio_weight / self.portfolio_weight.sum()
+                current_portfolio_risk = np.sqrt(reduce(np.dot, [assert_weight, cov, assert_weight.T])) * np.sqrt(250)
+                current_portfolio_risk = current_portfolio_risk * self.portfolio_weight.sum() / \
+                    self.get_current_portfolio_pnl()
             self.portfolio_risk.append(dict(date = self.assert_data.index[i], portfolio_risk = current_portfolio_risk))
             
     
@@ -73,7 +82,7 @@ class FundPortfolio(object):
     def get_portfolio_pnl(self):
         return self.portfolio_pnl
     
-    def get_daily_std():
+    def get_daily_std(self):
         '''
             获取组合每日风险
         '''
@@ -125,4 +134,26 @@ class EqualWeightPortfolio(MonthRebalancePortfolio):
         
         return new_weight, new_cash
 
+
+class VolatilityPortfolio(MonthRebalancePortfolio):
+    
+    '''
+        波动率倒数调仓
+    '''
+    
+    def __init__(self, assert_data: pd.DataFrame):
+        super(VolatilityPortfolio, self).__init__(assert_data)
+        
+    def get_rebalanced_weight(self, current_day):
+        if current_day < 30:
+            return self.portfolio_weight, self.portfolio_cash
+        
+        portfolio_pnl = self.get_current_portfolio_pnl()
+        
+        data = self.assert_data.iloc[current_day-30:current_day, :]
+        weight = 1.0 / data.pct_change().std().values
+        weight = weight / weight.sum()
+        
+        weight = weight * portfolio_pnl
+        return weight, 0.0
 
