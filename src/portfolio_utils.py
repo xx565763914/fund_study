@@ -28,11 +28,13 @@ class FundPortfolio(object):
         基金投资组合回测基类
     '''
     def __init__(self, assert_data: pd.DataFrame):
-        self.portfolio_pnl = []
-        self.portfolio_weight = None
-        self.portfolio_cash = 0.0
+        self.portfolio_pnl = []    # 组合pnl曲线
+        self.portfolio_weight = None # 组合权重
+        self.portfolio_cash = 0.0 # 组合现金保有量
         self.portfolio_risk = []
         self.assert_data = assert_data
+        self.history_weights = []
+        
     
     def backtest(self):
         days, assert_num = self.assert_data.shape
@@ -66,6 +68,8 @@ class FundPortfolio(object):
                     self.get_current_portfolio_pnl()
             self.portfolio_risk.append(dict(date = self.assert_data.index[i], portfolio_risk = current_portfolio_risk))
             
+            # 记录投资组合历史权重
+            self.history_weights.append(dict(date = self.assert_data.index[i], weight = self.portfolio_weight, cash = self.portfolio_cash))
     
     def get_current_portfolio_pnl(self):
         return self.portfolio_weight.sum() + self.portfolio_cash
@@ -87,6 +91,41 @@ class FundPortfolio(object):
             获取组合每日风险
         '''
         return self.portfolio_risk
+    
+    def get_history_weight(self):
+        '''
+             获取历史仓位权重
+        '''
+        return self.history_weights
+
+class RebalanceWhenExceed(FundPortfolio):
+    '''
+        组合波动率阈值触发调仓
+    '''
+    
+    def __init__(self, assert_data: pd.DataFrame, min_vol: float, max_vol: float):
+        super(RebalanceWhenExceed, self).__init__(assert_data)
+        self.min_vol = min_vol
+        self.max_vol = max_vol
+    
+    def is_balance_day(self, current_day):
+        if current_day < 30:
+            return False
+
+        cov = self.assert_data.iloc[current_day-30:current_day, :].pct_change().cov()
+        assert_weight = self.portfolio_weight / self.portfolio_weight.sum()
+        current_portfolio_risk = np.sqrt(reduce(np.dot, [assert_weight, cov, assert_weight.T])) * np.sqrt(250)
+        current_portfolio_risk = current_portfolio_risk * self.portfolio_weight.sum() / \
+            self.get_current_portfolio_pnl()
+            
+        # print(self.assert_data.index[current_day], current_portfolio_risk)
+        if not (current_portfolio_risk > self.min_vol and current_portfolio_risk < self.max_vol):
+            # print('调仓')
+            return True
+        
+        # print('不调仓')
+        return False
+    
     
 class MonthRebalancePortfolio(FundPortfolio):
     '''
